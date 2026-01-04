@@ -1,0 +1,21 @@
+
+{
+  "DB_DRIVER": "postgresql",
+  "SQLSERVER_CONFIG": {
+    "user": "your_username",
+    "password": "your_password",
+    "server": "your_server",
+    "database": "your_database",
+    "options": {
+      "encrypt": true,
+      "enableArithAbort": true
+    }
+  },
+  "POSTGRES_CONFIG": {
+    "user": "postgres",
+    "password": "Admin@123",
+    "host": "localhost",
+    "database": "profileDB",
+    "port": 5432
+  } 
+}
