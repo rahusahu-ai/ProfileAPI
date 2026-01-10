@@ -31,7 +31,7 @@ app.use('/api/tests', testsRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => res.send('Profile Back-end API'));
-logger.info('Application Started');
+logger.error('Application Started');
 // Global error handler
 AppGlobal.isPostreServerDb = true; // Example setting
 AppGlobal.isSqlServerDb = false; // Example setting

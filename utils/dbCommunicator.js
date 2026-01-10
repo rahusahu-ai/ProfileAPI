@@ -31,15 +31,15 @@ class DBCommunicator {
             if (AppGlobal.isSqlServerDb) {
                 this._UseSQLServer = true;
                 this._UsePGServer = true
-                logger.info(process.env.NODE_ENV)
-                logger.info(process.env.ENV_DB)
-                logger.info(process.env.ENV_HOST)
-                logger.info(process.env.ENV_USER)
-                logger.info(process.env.ENV_PWD)
+                logger.error(process.env.NODE_ENV)
+                logger.error(process.env.ENV_DB)
+                logger.error(process.env.ENV_HOST)
+                logger.error(process.env.ENV_USER)
+                logger.error(process.env.ENV_PWD)
 
                 if (!process.env.ENV_DB && process.env.ENV_HOST && process.env.ENV_USER && process.env.ENV_PWD) {
-                    logger.info("inside the if condition ")
-                    logger.info(process.env.ENV_DB + " :: " + process.env.ENV_HOST + " :: " + process.env.ENV_USER + " :: " + process.env.ENV_PWD)
+                    logger.error("inside the if condition ")
+                    logger.error(process.env.ENV_DB + " :: " + process.env.ENV_HOST + " :: " + process.env.ENV_USER + " :: " + process.env.ENV_PWD)
 
                     this._DBConfigDetails = {
                         "user": process.env.ENV_USER,
@@ -71,15 +71,15 @@ class DBCommunicator {
             else if (AppGlobal.isPostreServerDb) {
                 this._UseSQLServer = false;
                 this._UsePGServer = true
-                logger.info(process.env.PG_PORT)
-                logger.info(process.env.PG_DATABASE)
-                logger.info(process.env.PG_HOST)
-                logger.info(process.env.PG_USER)
-                logger.info(process.env.PG_PASSWORD)
+                logger.error(process.env.PG_PORT)
+                logger.error(process.env.PG_DATABASE)
+                logger.error(process.env.PG_HOST)
+                logger.error(process.env.PG_USER)
+                logger.error(process.env.PG_PASSWORD)
 
                 if (process.env.PG_USER_neon && process.env.PG_HOST_neon && process.env.PG_USER_neon && process.env.PG_PASSWORD_neon) {
-                    logger.info("inside the if condition ")
-                    logger.info(process.env.PG_DATABASE_neon + " :: " + process.env.PG_HOST_neon + " :: " + process.env.PG_USER_neon + " :: " + process.env.PG_PASSWORD_neon)
+                    logger.error("inside the if condition ")
+                    logger.error(process.env.PG_DATABASE_neon + " :: " + process.env.PG_HOST_neon + " :: " + process.env.PG_USER_neon + " :: " + process.env.PG_PASSWORD_neon)
 
                     this._DBConfigDetails = {
                         "user": process.env.PG_USER_neon,
@@ -93,21 +93,21 @@ class DBCommunicator {
                     }
                 }
                 else {
-                    logger.info(configData.POSTGRES_CONFIG.database + " " + configData.POSTGRES_CONFIG.host)
-                    logger.info(configData.POSTGRES_CONFIG.port + " " + configData.POSTGRES_CONFIG.host)
+                    logger.error(configData.POSTGRES_CONFIG.database + " " + configData.POSTGRES_CONFIG.host)
+                    logger.error(configData.POSTGRES_CONFIG.port + " " + configData.POSTGRES_CONFIG.host)
 
                     this._DBConfigDetails = configData.POSTGRES_CONFIG;
                 }
-                logger.info("insde the before new pool")
+                logger.error("insde the before new pool")
                 this._connectionPool = new Pool(this._DBConfigDetails);
-                logger.info("Pool created")
+                logger.error("Pool created")
                 this._client = await this._connectionPool.connect()
-                logger.info("Client created , DB connected")
+                logger.error("Client created , DB connected")
 
             }
         }
         catch (error) {
-            logger.info(error.message);
+            logger.error(error.message);
         }
         return 0;
     }
