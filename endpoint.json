@@ -1,0 +1,17 @@
+{
+    "login":{
+        "method": "POST",
+        "description": "Authenticate user and return JWT token",
+        "path": "/auth/login",
+        "body": {
+            "username": "raju",
+            "password": "Admin@123"
+        }
+        
+    },
+    "getAddress": {
+        "method": "GET",
+        "path": "/auth/address",
+        "description": "Get user's address"
+    }
+}

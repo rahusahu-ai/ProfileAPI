@@ -77,15 +77,15 @@ class DBCommunicator {
                 logger.info(process.env.PG_USER)
                 logger.info(process.env.PG_PASSWORD)
 
-                if (process.env.ENV_DB && process.env.ENV_HOST && process.env.ENV_USER && process.env.ENV_PWD) {
+                if (process.env.PG_USER_neon && process.env.PG_HOST_neon && process.env.PG_USER_neon && process.env.PG_PASSWORD_neon) {
                     logger.info("inside the if condition ")
-                    logger.info(process.env.ENV_DB + " :: " + process.env.ENV_HOST + " :: " + process.env.ENV_USER + " :: " + process.env.ENV_PWD)
+                    logger.info(process.env.PG_DATABASE_neon + " :: " + process.env.PG_HOST_neon + " :: " + process.env.PG_USER_neon + " :: " + process.env.PG_PASSWORD_neon)
 
                     this._DBConfigDetails = {
-                        "user": process.env.ENV_USER,
-                        "password": process.env.ENV_PWD,
-                        "host": process.env.ENV_HOST,
-                        "database": process.env.ENV_DB,
+                        "user": process.env.PG_USER_neon,
+                        "password": process.env.PG_PASSWORD_neon,
+                        "host": process.env.PG_HOST_neon,
+                        "database": process.env.PG_DATABASE_neon,
                         "port": 5432,
                         "ssl": {
                             "rejectUnauthorized": false

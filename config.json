@@ -17,5 +17,14 @@
     "host": "localhost",
     "database": "profileDB",
     "port": 5432
-  } 
+  },
+  "JWT_SECRET": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30",
+
+  "PRODUCTION_CONFIG": {
+  "NODE_ENV": "production",
+  "DB_URL": "postgresql://neondb_owner:npg_DJd6xTqKSb1Y@ep-silent-voice-aduk0zy9-pooler.c-2.us-east-1.aws.neon.tech/profileDB?sslmode=require",
+  "PORT": 5432
+  }
+
+
 }
