@@ -14,6 +14,7 @@ const authRoutes = require('./routes/auth');
 const subscribersRoutes = require('./routes/subscriber');
 const postsRoutes = require('./routes/post');
 const testsRoutes = require('./routes/test');
+const kiteRoutes = require('./routes/kiteIntegration');
 const logger = require('./utils/winstonLogger');
 const AppGlobal = require('./utils/appGlobal');
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/subscribers', subscribersRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/tests', testsRoutes);
+app.use('/api/kite', kiteRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

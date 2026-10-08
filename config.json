@@ -23,7 +23,13 @@
   "PRODUCTION_CONFIG": {
   "NODE_ENV": "production",
   "DB_URL": "postgresql://neondb_owner:npg_DJd6xTqKSb1Y@ep-silent-voice-aduk0zy9-pooler.c-2.us-east-1.aws.neon.tech/profileDB?sslmode=require",
-  "PORT": 5432
+  "PORT": 5432,
+    "API key": "d65pes216aml7rs0",
+    "API secret": "46jsn1mq4601cq1kas4dswo8zlw62eer",
+    "Redirect URL": "https://rajusahu.in/trade",
+    "Postback URL": "https://rajusahu.in/analysis"
+
+
   }
 
 
