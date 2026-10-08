@@ -18,7 +18,7 @@ async function getById(req, res, next) {
 
 async function kiteLogin(req, res, next) {
   try {
-    const apiKey = process.env.KITE_API_KEY|| configData.PRODUCTION_CONFIG.KITE_API_KEY;
+    const apiKey = process.env.KITE_API_KEY|| "d65pes216aml7rs0";
     if (!apiKey) {
       return res.status(500).json({ message: 'KITE_API_KEY is not configured' });
     }
