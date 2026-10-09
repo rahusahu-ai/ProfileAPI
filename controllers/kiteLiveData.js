@@ -1,8 +1,8 @@
 const { KiteTicker } = require('kiteconnect');
 
 const ticker = new KiteTicker({
-  api_key: process.env.KITE_API_KEY,
-  access_token: storedAccessToken
+  api_key: process.env.KITE_API_KEY || 'd65pes216aml7rs0',
+  access_token: storedAccessToken // Replace with your actual access token
 });
 
 ticker.connect();

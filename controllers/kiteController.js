@@ -1,6 +1,21 @@
 const { KiteConnect } = require('kiteconnect');
 const logger = require('../utils/winstonLogger');
 
+function getKiteApiConfig() {
+  const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+  const apiSecret = process.env.KITE_API_SECRET || process.env.KITE_CLIENT_SECRET || '0g1q6j7v8x9y2z3a4b5c6d7e8f9g0h1i';
+
+  if (!apiKey) {
+    throw new Error('KITE_API_KEY is not configured');
+  }
+
+  if (!apiSecret) {
+    throw new Error('KITE_API_SECRET is not configured');
+  }
+
+  return { apiKey, apiSecret };
+}
+
 async function getById(req, res, next) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -19,12 +34,8 @@ async function getById(req, res, next) {
 
 async function kiteLogin(req, res, next) {
   try {
-    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const { apiKey } = getKiteApiConfig();
     const redirectUri = process.env.KITE_REDIRECT_URI || process.env.KITE_CALLBACK_URL;
-
-    if (!apiKey) {
-      return res.status(500).json({ message: 'KITE_API_KEY is not configured' });
-    }
 
     const loginUrl = new URL('https://kite.trade/connect/login');
     loginUrl.searchParams.set('v', '3');
@@ -48,12 +59,7 @@ async function kiteCallback(req, res, next) {
       return res.status(400).json({ message: 'Kite login did not return a request_token' });
     }
 
-    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
-    const apiSecret = process.env.KITE_API_SECRET || process.env.KITE_CLIENT_SECRET;
-
-    if (!apiKey || !apiSecret) {
-      return res.status(500).json({ message: 'Kite API credentials are not configured' });
-    }
+    const { apiKey, apiSecret } = getKiteApiConfig();
 
     const kite = new KiteConnect({ api_key: apiKey });
     const session = await kite.generateSession(requestToken, apiSecret);
@@ -79,7 +85,8 @@ async function getKiteProfile(req, res, next) {
       return res.status(400).json({ message: 'access_token is required' });
     }
 
-    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const { apiKey } = getKiteApiConfig();
+
     const kite = new KiteConnect({ api_key: apiKey });
     kite.setAccessToken(accessToken);
 
@@ -98,7 +105,8 @@ async function getNiftyIndexPerMinute(req, res, next) {
       return res.status(400).json({ message: 'access_token is required' });
     }
 
-    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const { apiKey } = getKiteApiConfig();
+
     const instrumentToken = Number(req.query.instrument_token || 256265);
     const to = new Date();
     const from = new Date(to.getTime() - 60 * 60 * 1000);
