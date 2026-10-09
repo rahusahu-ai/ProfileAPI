@@ -27,7 +27,7 @@ async function kiteLogin(req, res, next) {
     loginUrl.searchParams.set('v', '3');
     loginUrl.searchParams.set('api_key', apiKey);
 
-    return res.json({ loginUrl: loginUrl.toString() });
+    return res.redirect(302, loginUrl.toString());
   } catch (err) {
     next(err);
   }
