@@ -1,11 +1,11 @@
 FROM node:18-alpine
 WORKDIR /app
 
-# Install dependencies
+# Install production dependencies using the lockfile
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
-# Copy source
+# Copy application source
 COPY . .
 
 ENV NODE_ENV=production
