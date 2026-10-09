@@ -1,13 +1,12 @@
-FROM node:18-alpine
+FROM node:18-bullseye-slim
 WORKDIR /app
 
-# Install production dependencies using the lockfile
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy application source
 COPY . .
-
 ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["node","app.js"]
