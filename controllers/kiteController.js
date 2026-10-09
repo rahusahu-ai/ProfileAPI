@@ -1,3 +1,4 @@
+const { KiteConnect } = require('kiteconnect');
 const logger = require('../utils/winstonLogger');
 
 async function getById(req, res, next) {
@@ -14,18 +15,24 @@ async function getById(req, res, next) {
       return res.json(row);
     }
   } catch (err) { next(err); }
-}   
+}
 
 async function kiteLogin(req, res, next) {
   try {
-    const apiKey = process.env.KITE_API_KEY|| "d65pes216aml7rs0";
+    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const redirectUri = process.env.KITE_REDIRECT_URI || process.env.KITE_CALLBACK_URL;
+
     if (!apiKey) {
       return res.status(500).json({ message: 'KITE_API_KEY is not configured' });
     }
 
-    const loginUrl = new URL('https://kite.zerodha.com/connect/login');
+    const loginUrl = new URL('https://kite.trade/connect/login');
     loginUrl.searchParams.set('v', '3');
     loginUrl.searchParams.set('api_key', apiKey);
+
+    if (redirectUri) {
+      loginUrl.searchParams.set('redirect_uri', redirectUri);
+    }
 
     return res.json({ loginUrl: loginUrl.toString() });
   } catch (err) {
@@ -41,16 +48,76 @@ async function kiteCallback(req, res, next) {
       return res.status(400).json({ message: 'Kite login did not return a request_token' });
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      logger.info('Kite login callback received a request_token');
-    } else {
-      logger.info(`Kite request_token received: ${requestToken}`);
+    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const apiSecret = process.env.KITE_API_SECRET || process.env.KITE_CLIENT_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      return res.status(500).json({ message: 'Kite API credentials are not configured' });
     }
 
-    return res.json({ message: 'Kite login succeeded; request_token received' });
+    const kite = new KiteConnect({ api_key: apiKey });
+    const session = await kite.generateSession(requestToken, apiSecret);
+    kite.setAccessToken(session.access_token);
+
+    if (process.env.NODE_ENV === 'production') {
+      logger.info('Kite login callback received a valid session');
+    } else {
+      logger.info(`Kite session generated for request_token: ${requestToken}`);
+    }
+
+    return res.redirect('https://rajusahu.in/trade');
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { kiteLogin, kiteCallback };
+async function getKiteProfile(req, res, next) {
+  try {
+    const accessToken = req.query.access_token || req.body.access_token || req.headers['x-kite-access-token'];
+
+    if (!accessToken) {
+      return res.status(400).json({ message: 'access_token is required' });
+    }
+
+    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const kite = new KiteConnect({ api_key: apiKey });
+    kite.setAccessToken(accessToken);
+
+    const profile = await kite.getProfile();
+    return res.json(profile);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getNiftyIndexPerMinute(req, res, next) {
+  try {
+    const accessToken = req.query.access_token || req.body.access_token || req.headers['x-kite-access-token'];
+
+    if (!accessToken) {
+      return res.status(400).json({ message: 'access_token is required' });
+    }
+
+    const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
+    const instrumentToken = Number(req.query.instrument_token || 256265);
+    const to = new Date();
+    const from = new Date(to.getTime() - 60 * 60 * 1000);
+
+    const kite = new KiteConnect({ api_key: apiKey });
+    kite.setAccessToken(accessToken);
+
+    const candles = await kite.getHistoricalData(instrumentToken, 'minute', from.toISOString(), to.toISOString(), false, false);
+
+    return res.json({
+      instrument_token: instrumentToken,
+      interval: 'minute',
+      from: from.toISOString(),
+      to: to.toISOString(),
+      candles
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { kiteLogin, kiteCallback, getKiteProfile, getNiftyIndexPerMinute };
