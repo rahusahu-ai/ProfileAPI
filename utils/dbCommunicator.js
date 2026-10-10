@@ -35,11 +35,10 @@ class DBCommunicator {
                 logger.error(process.env.ENV_DB)
                 logger.error(process.env.ENV_HOST)
                 logger.error(process.env.ENV_USER)
-                logger.error(process.env.ENV_PWD)
 
                 if (!process.env.ENV_DB && process.env.ENV_HOST && process.env.ENV_USER && process.env.ENV_PWD) {
                     logger.error("inside the if condition ")
-                    logger.error(process.env.ENV_DB + " :: " + process.env.ENV_HOST + " :: " + process.env.ENV_USER + " :: " + process.env.ENV_PWD)
+                    logger.error(process.env.ENV_DB + " :: " + process.env.ENV_HOST + " :: " + process.env.ENV_USER)
 
                     this._DBConfigDetails = {
                         "user": process.env.ENV_USER,
@@ -75,7 +74,6 @@ class DBCommunicator {
                 logger.error(process.env.PG_DATABASE)
                 logger.error(process.env.PG_HOST)
                 logger.error(process.env.PG_USER)
-                logger.error(process.env.PG_PASSWORD)
 
                 if (process.env.PG_USER_neon && process.env.PG_HOST_neon && process.env.PG_USER_neon && process.env.PG_PASSWORD_neon) {
                     logger.error("inside the if condition ")

@@ -1,8 +1,11 @@
 // db/postgres.js
 const { Pool } = require('pg');
 require('dotenv').config();
+const config = require('../config.json');
 
-const connectionString = process.env.DATABASE_URL || process.env.DB_URL;
+const connectionString = process.env.DATABASE_URL
+  || process.env.DB_URL
+  || config.PRODUCTION_CONFIG?.DB_URL;
 const poolConfig = {
   max: parseInt(process.env.DB_MAX_POOL || '10', 10),
   idleTimeoutMillis: 30000

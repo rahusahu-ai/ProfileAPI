@@ -1,6 +1,6 @@
 const { KiteConnect } = require('kiteconnect');
 const logger = require('../utils/winstonLogger');
-const { getPool, query, sql } = require('../db');
+const DBCommunicator = require('../utils/dbCommunicator');
 require('dotenv').config();
 
 function getKiteApiConfig() {
@@ -117,42 +117,62 @@ async function saveKiteSession(session) {
   const serializedSession = JSON.stringify(sessionData);
 
   try {
-    if (process.env.DB_DRIVER === 'sqlserver') {
-      const pool = await getPool();
-      await pool.request()
-        .input('kite_user_id', sql.NVarChar(64), session.user_id)
-        .input('access_token', sql.NVarChar(sql.MAX), accessToken)
-        .input('public_token', sql.NVarChar(sql.MAX), publicToken || null)
-        .input('session_data', sql.NVarChar(sql.MAX), serializedSession)
-        .query(`
-          MERGE [kite_trade].[userProfile_sesssion] WITH (HOLDLOCK) AS target
-          USING (SELECT @kite_user_id AS kite_user_id) AS source
-          ON target.kite_user_id = source.kite_user_id
-          WHEN MATCHED THEN UPDATE SET
-            access_token = @access_token,
-            public_token = @public_token,
-            session_data = @session_data,
-            updated_at = SYSUTCDATETIME()
-          WHEN NOT MATCHED THEN INSERT
-            (kite_user_id, access_token, public_token, session_data)
-            VALUES (@kite_user_id, @access_token, @public_token, @session_data);
-        `);
-      return;
-    }
+    await withDBCommunicator(async (db) => {
+      if (db.useSQLServer) {
+        const sql = require('mssql');
+        await db.connectionPool.request()
+          .input('kite_user_id', sql.NVarChar(64), session.user_id)
+          .input('access_token', sql.NVarChar(sql.MAX), accessToken)
+          .input('public_token', sql.NVarChar(sql.MAX), publicToken || null)
+          .input('session_data', sql.NVarChar(sql.MAX), serializedSession)
+          .query(`
+            MERGE [kite_trade].[userProfile_sesssion] WITH (HOLDLOCK) AS target
+            USING (SELECT @kite_user_id AS kite_user_id) AS source
+            ON target.kite_user_id = source.kite_user_id
+            WHEN MATCHED THEN UPDATE SET
+              access_token = @access_token,
+              public_token = @public_token,
+              session_data = @session_data,
+              updated_at = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT
+              (kite_user_id, access_token, public_token, session_data)
+              VALUES (@kite_user_id, @access_token, @public_token, @session_data);
+          `);
+        return;
+      }
 
-    await query(`
-      INSERT INTO "kite_trade"."userProfile_sesssion"
-        (kite_user_id, access_token, public_token, session_data)
-      VALUES ($1, $2, $3, $4::jsonb)
-      ON CONFLICT (kite_user_id) DO UPDATE SET
-        access_token = EXCLUDED.access_token,
-        public_token = EXCLUDED.public_token,
-        session_data = EXCLUDED.session_data,
-        updated_at = NOW()
-    `, [session.user_id, accessToken, publicToken || null, serializedSession]);
+      await db.client.query(`
+        INSERT INTO "kite_trade"."userProfile_sesssion"
+          (kite_user_id, access_token, public_token, session_data)
+        VALUES ($1, $2, $3, $4::jsonb)
+        ON CONFLICT (kite_user_id) DO UPDATE SET
+          access_token = EXCLUDED.access_token,
+          public_token = EXCLUDED.public_token,
+          session_data = EXCLUDED.session_data,
+          updated_at = NOW()
+      `, [session.user_id, accessToken, publicToken || null, serializedSession]);
+    });
   } catch (err) {
     logger.error('Kite session database upsert failed', getDatabaseErrorDetails(err));
     throw err;
+  }
+}
+
+async function withDBCommunicator(operation) {
+  const db = new DBCommunicator();
+  await db.initialise();
+
+  if (db.useSQLServer && !db.connectionPool) {
+    throw new Error('SQL Server connection initialization failed');
+  }
+  if (!db.useSQLServer && !db.client) {
+    throw new Error('PostgreSQL connection initialization failed');
+  }
+
+  try {
+    return await operation(db);
+  } finally {
+    await db.closeConnection();
   }
 }
 
@@ -178,23 +198,25 @@ function getDatabaseErrorDetails(err) {
 async function getKiteProfile(req, res, next) {
   try {
     let accessToken;
-    if (process.env.DB_DRIVER === 'sqlserver') {
-      const pool = await getPool();
-      const result = await pool.request().query(`
-        SELECT TOP (1) access_token
-        FROM [kite_trade].[userProfile_sesssion]
-        ORDER BY updated_at DESC
-      `);
-      accessToken = result.recordset[0]?.access_token;
-    } else {
-      const result = await query(`
+    await withDBCommunicator(async (db) => {
+      if (db.useSQLServer) {
+        const result = await db.connectionPool.request().query(`
+          SELECT TOP (1) access_token
+          FROM [kite_trade].[userProfile_sesssion]
+          ORDER BY updated_at DESC
+        `);
+        accessToken = result.recordset[0]?.access_token;
+        return;
+      }
+
+      const result = await db.client.query(`
         SELECT access_token
         FROM "kite_trade"."userProfile_sesssion"
         ORDER BY updated_at DESC
         LIMIT 1
       `);
       accessToken = result.rows[0]?.access_token;
-    }
+    });
 
     if (!accessToken) {
       return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
