@@ -56,7 +56,7 @@ async function kiteCallback(req, res, next) {
 
     
 
-    return res.json({ res : request_token + ' ' + status });
+    return res.json({ res : requestToken + ' ' + status });
   } catch (err) {
     next(err);
   }
