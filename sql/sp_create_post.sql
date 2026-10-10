@@ -1,4 +1,4 @@
--- sp_create_post.sql
+-- sp_create_post.sql..
 USE ProfileDB;
 GO
 IF OBJECT_ID('dbo.sp_create_post', 'P') IS NOT NULL
