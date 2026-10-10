@@ -3,7 +3,7 @@ const logger = require('../utils/winstonLogger');
 
 function getKiteApiConfig() {
   const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';
-  const apiSecret = process.env.KITE_API_SECRET || process.env.KITE_CLIENT_SECRET || '0g1q6j7v8x9y2z3a4b5c6d7e8f9g0h1i';
+  const apiSecret = process.env.KITE_API_SECRET || process.env.KITE_CLIENT_SECRET || '46jsn1mq4601cq1kas4dswo8zlw62eer';
 
   if (!apiKey) {
     throw new Error('KITE_API_KEY is not configured');
