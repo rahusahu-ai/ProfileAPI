@@ -1,7 +1,9 @@
 -- Run only the section matching your database engine.
 
 -- PostgreSQL
-CREATE TABLE IF NOT EXISTS "userProfile_sesssion" (
+CREATE SCHEMA IF NOT EXISTS "kite_trade";
+
+CREATE TABLE IF NOT EXISTS "kite_trade.userProfile_sesssion" (
   id BIGSERIAL PRIMARY KEY,
   kite_user_id VARCHAR(64) NOT NULL UNIQUE,
   access_token TEXT NOT NULL,
