@@ -46,7 +46,7 @@ async function kiteLogin(req, res, next) {
     next(err);
   }
 }
-async function kiteCallback(req, res, next) {
+async function kiteCallback1(req, res, next) {
   try {
     const { request_token: requestToken, status } = req.query;
     if (status !== 'success' || typeof requestToken !== 'string' || !requestToken) {
@@ -54,16 +54,16 @@ async function kiteCallback(req, res, next) {
       return res.status(400).json({ message: 'Kite login did not return a request_token' });
     }
 
-    
+    return res.redirect('https://rajusahu.in/trade');
 
-    return res.json({ res : requestToken + ' ' + status });
+    
   } catch (err) {
     next(err);
   }
 }  
 
 
-async function kiteCallback1(req, res, next) {
+async function kiteCallback(req, res, next) {
   try {
     const { request_token: requestToken, status } = req.query;
     if (status !== 'success' || typeof requestToken !== 'string' || !requestToken) {
@@ -83,7 +83,7 @@ async function kiteCallback1(req, res, next) {
       logger.info(`Kite session generated for request_token: ${requestToken}`);
     }
 
-    return res.redirect('https://rajusahu.in/trade');
+    return res.json({ res : requestToken + ' ' + status  + ' ' + session.access_token + ' ' + session.public_token + ' ' + session.user_id });
   } catch (err) {
     next(err);
   }
