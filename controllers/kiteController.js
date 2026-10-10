@@ -35,15 +35,11 @@ async function getById(req, res, next) {
 async function kiteLogin(req, res, next) {
   try {
     const { apiKey } = getKiteApiConfig();
-    const redirectUri = process.env.KITE_REDIRECT_URI || process.env.KITE_CALLBACK_URL;
-
+    
     const loginUrl = new URL('https://kite.trade/connect/login');
     loginUrl.searchParams.set('v', '3');
     loginUrl.searchParams.set('api_key', apiKey);
 
-    if (redirectUri) {
-      loginUrl.searchParams.set('redirect_uri', redirectUri);
-    }
 
     return res.json({ loginUrl: loginUrl.toString() });
   } catch (err) {
