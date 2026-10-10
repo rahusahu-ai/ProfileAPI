@@ -35,7 +35,7 @@ async function getById(req, res, next) {
 async function kiteLogin(req, res, next) {
   try {
     const { apiKey } = getKiteApiConfig();
-    
+
     const loginUrl = new URL('https://kite.trade/connect/login');
     loginUrl.searchParams.set('v', '3');
     loginUrl.searchParams.set('api_key', apiKey);
@@ -46,8 +46,24 @@ async function kiteLogin(req, res, next) {
     next(err);
   }
 }
-
 async function kiteCallback(req, res, next) {
+  try {
+    const { request_token: requestToken, status } = req.query;
+    if (status !== 'success' || typeof requestToken !== 'string' || !requestToken) {
+      logger.warn(`Kite login callback failed (status: ${status || 'missing'})`);
+      return res.status(400).json({ message: 'Kite login did not return a request_token' });
+    }
+
+    
+
+    return res.json({ res : request_token + ' ' + status });
+  } catch (err) {
+    next(err);
+  }
+}  
+
+
+async function kiteCallback1(req, res, next) {
   try {
     const { request_token: requestToken, status } = req.query;
     if (status !== 'success' || typeof requestToken !== 'string' || !requestToken) {
