@@ -195,37 +195,43 @@ function getDatabaseErrorDetails(err) {
   return Object.fromEntries(Object.entries(details).filter(([, value]) => value !== undefined));
 }
 
+async function getKiteSession() {
+  let accessToken;
+
+  await withDBCommunicator(async (db) => {
+    if (db.useSQLServer) {
+      const result = await db.connectionPool.request().query(`
+        SELECT TOP (1) access_token
+        FROM [kite_trade].[userProfile_sesssion]
+        ORDER BY updated_at DESC
+      `);
+      accessToken = result.recordset[0]?.access_token;
+      return;
+    }
+
+    const result = await db.client.query(`
+      SELECT access_token
+      FROM kite_trade.userProfile_sesssion
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `);
+    accessToken = result.rows[0]?.access_token;
+  });
+
+  return accessToken ? { accessToken } : null;
+}
+
 async function getKiteProfile(req, res, next) {
   try {
-    let accessToken;
-    await withDBCommunicator(async (db) => {
-      if (db.useSQLServer) {
-        const result = await db.connectionPool.request().query(`
-          SELECT TOP (1) access_token
-          FROM [kite_trade].[userProfile_sesssion]
-          ORDER BY updated_at DESC
-        `);
-        accessToken = result.recordset[0]?.access_token;
-        return;
-      }
-
-      const result = await db.client.query(`
-        SELECT access_token
-        FROM kite_trade.userProfile_sesssion
-        ORDER BY updated_at DESC
-        LIMIT 1
-      `);
-      accessToken = result.rows[0]?.access_token;
-    });
-
-    if (!accessToken) {
+    const session = await getKiteSession();
+    if (!session) {
       return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
     }
 
     const { apiKey } = getKiteApiConfig();
 
     const kite = new KiteConnect({ api_key: apiKey });
-    kite.setAccessToken(accessToken);
+    kite.setAccessToken(session.accessToken);
 
     const profile = await kite.getProfile();
     return res.json(profile);
@@ -236,10 +242,9 @@ async function getKiteProfile(req, res, next) {
 
 async function getNiftyIndexPerMinute(req, res, next) {
   try {
-    const accessToken = req.query.access_token || req.body.access_token || req.headers['x-kite-access-token'];
-
-    if (!accessToken) {
-      return res.status(400).json({ message: 'access_token is required' });
+    const session = await getKiteSession();
+    if (!session) {
+      return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
     }
 
     const { apiKey } = getKiteApiConfig();
@@ -249,7 +254,7 @@ async function getNiftyIndexPerMinute(req, res, next) {
     const from = new Date(to.getTime() - 60 * 60 * 1000);
 
     const kite = new KiteConnect({ api_key: apiKey });
-    kite.setAccessToken(accessToken);
+    kite.setAccessToken(session.accessToken);
 
     const candles = await kite.getHistoricalData(instrumentToken, 'minute', from.toISOString(), to.toISOString(), false, false);
 
@@ -265,4 +270,4 @@ async function getNiftyIndexPerMinute(req, res, next) {
   }
 }
 
-module.exports = { kiteLogin, kiteCallback, getKiteProfile, getNiftyIndexPerMinute, saveKiteSession };
+module.exports = { kiteLogin, kiteCallback, getKiteSession, getKiteProfile, getNiftyIndexPerMinute, saveKiteSession };
