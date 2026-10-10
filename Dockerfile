@@ -1,7 +1,9 @@
-FROM node:18-bullseye-slim
+FROM node:18-bookworm-slim
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci --omit=dev
