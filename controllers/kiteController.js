@@ -142,7 +142,7 @@ async function saveKiteSession(session) {
       }
 
       await db.client.query(`
-        INSERT INTO "kite_trade"."userProfile_sesssion"
+        INSERT INTO kite_trade.userProfile_sesssion
           (kite_user_id, access_token, public_token, session_data)
         VALUES ($1, $2, $3, $4::jsonb)
         ON CONFLICT (kite_user_id) DO UPDATE SET
@@ -211,7 +211,7 @@ async function getKiteProfile(req, res, next) {
 
       const result = await db.client.query(`
         SELECT access_token
-        FROM "kite_trade"."userProfile_sesssion"
+        FROM kite_trade.userProfile_sesssion
         ORDER BY updated_at DESC
         LIMIT 1
       `);
