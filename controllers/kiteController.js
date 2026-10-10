@@ -74,16 +74,23 @@ async function kiteCallback(req, res, next) {
     const { apiKey, apiSecret } = getKiteApiConfig();
 
     const kite = new KiteConnect({ api_key: apiKey });
-    const session = await kite.generateSession(requestToken, apiSecret);
-    kite.setAccessToken(session.access_token);
-
-    if (process.env.NODE_ENV === 'production') {
-      logger.info('Kite login callback received a valid session');
-    } else {
-      logger.info(`Kite session generated for request_token: ${requestToken}`);
+    let session;
+    try {
+      session = await kite.generateSession(requestToken, apiSecret);
+    } catch (err) {
+      logger.error('Kite session exchange failed', {
+        errorName: err.name,
+        errorType: err.error_type || err.data?.error_type,
+        status: err.status || err.response?.status,
+        message: err.message
+      });
+      return res.status(502).json({ message: 'Kite session exchange failed; check server logs for details' + (err.message ? `: ${err.message}` : '')  });
     }
 
-    return res.json({ res : requestToken + ' ' + status  + ' ' + session.access_token + ' ' + session.public_token + ' ' + session.user_id });
+    kite.setAccessToken(session.access_token);
+
+    logger.info('Kite session generated successfully', { userId: session.user_id });
+    return res.redirect('https://rajusahu.in/trade');
   } catch (err) {
     next(err);
   }
