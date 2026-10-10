@@ -1,6 +1,7 @@
 const { KiteConnect } = require('kiteconnect');
 const logger = require('../utils/winstonLogger');
 const { getPool, query, sql } = require('../db');
+require('dotenv').config();
 
 function getKiteApiConfig() {
   const apiKey = process.env.KITE_API_KEY || process.env.KITE_CLIENT_ID || 'd65pes216aml7rs0';

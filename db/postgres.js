@@ -2,15 +2,27 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  user: process.env.PG_USER || process.env.DB_USER,
-  host: process.env.PG_HOST || process.env.DB_SERVER || 'localhost',
-  database: process.env.PG_DATABASE || process.env.DB_DATABASE || 'profiledb',
-  password: process.env.PG_PASSWORD || process.env.DB_PASS,
-  port: parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10),
+const connectionString = process.env.DATABASE_URL || process.env.DB_URL;
+const poolConfig = {
   max: parseInt(process.env.DB_MAX_POOL || '10', 10),
   idleTimeoutMillis: 30000
-});
+};
+
+if (connectionString) {
+  poolConfig.connectionString = connectionString;
+} else {
+  poolConfig.user = process.env.PG_USER || process.env.DB_USER;
+  poolConfig.host = process.env.PG_HOST || process.env.DB_SERVER || 'localhost';
+  poolConfig.database = process.env.PG_DATABASE || process.env.DB_DATABASE || 'profiledb';
+  poolConfig.password = process.env.PG_PASSWORD || process.env.DB_PASS;
+  poolConfig.port = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+}
+
+if (process.env.PG_SSL === 'true') {
+  poolConfig.ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => console.error('Unexpected Postgres client error', err));
 
