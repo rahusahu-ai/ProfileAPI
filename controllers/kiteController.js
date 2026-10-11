@@ -240,6 +240,63 @@ async function getKiteProfile(req, res, next) {
   }
 }
 
+async function getAllInstruments(req, res, next) {
+  try {
+    const kite = await getAuthenticatedKiteClient();
+    if (!kite) {
+      return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
+    }
+
+    const instruments = await kite.getInstruments();
+    return res.json(instruments);
+  } catch (err) {
+    return respondWithKiteError(res, 'Failed to fetch all instruments', err);
+  }
+}
+
+async function getInstrumentsByExchange(req, res, next) {
+  try {
+    const exchange = String(req.params.exchange || '').toUpperCase();
+    const supportedExchanges = ['NSE', 'BSE', 'NFO', 'BFO', 'CDS', 'MCX'];
+    if (!supportedExchanges.includes(exchange)) {
+      return res.status(400).json({
+        message: 'Unsupported exchange',
+        supportedExchanges
+      });
+    }
+
+    const kite = await getAuthenticatedKiteClient();
+    if (!kite) {
+      return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
+    }
+
+    const instruments = await kite.getInstruments(exchange);
+    return res.json(instruments);
+  } catch (err) {
+    return respondWithKiteError(res, 'Failed to fetch instruments for exchange', err);
+  }
+}
+
+async function getAuthenticatedKiteClient() {
+  const session = await getKiteSession();
+  if (!session) return null;
+
+  const { apiKey } = getKiteApiConfig();
+  const kite = new KiteConnect({ api_key: apiKey });
+  kite.setAccessToken(session.accessToken);
+  return kite;
+}
+
+function respondWithKiteError(res, message, err) {
+  const error = {
+    type: err.error_type || err.data?.error_type || err.name,
+    status: err.status || err.response?.status,
+    message: err.message
+  };
+  logger.error(message, error);
+  return res.status(502).json({ message, error });
+}
+
 async function getNiftyIndexPerMinute(req, res, next) {
   try {
     const session = await getKiteSession();
@@ -249,22 +306,35 @@ async function getNiftyIndexPerMinute(req, res, next) {
 
     const { apiKey } = getKiteApiConfig();
 
-    const instrumentToken = Number(req.query.instrument_token || 256265);
+    const options = { ...req.query, ...(req.body || {}) };
+    const instrumentToken = Number(options.instrument_token || 256265);
     if (!Number.isSafeInteger(instrumentToken) || instrumentToken <= 0) {
       return res.status(400).json({ message: 'instrument_token must be a positive integer' });
     }
 
+    const interval = options.interval || 'minute';
+    const validIntervals = ['minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'];
+    if (!validIntervals.includes(interval)) {
+      return res.status(400).json({ message: 'Unsupported interval', validIntervals });
+    }
+
     const to = new Date();
     const from = new Date(to.getTime() - 60 * 60 * 1000);
-    const fromDate = formatKiteDate(from);
-    const toDate = formatKiteDate(to);
+    const fromDate = parseKiteDate(options.from, from);
+    const toDate = parseKiteDate(options.to, to);
+    if (!fromDate || !toDate || new Date(fromDate) >= new Date(toDate)) {
+      return res.status(400).json({ message: 'from and to must be valid dates, with from earlier than to' });
+    }
+
+    const continuous = parseBooleanOption(options.continuous);
+    const oi = parseBooleanOption(options.oi);
 
     const kite = new KiteConnect({ api_key: apiKey });
     kite.setAccessToken(session.accessToken);
 
     let candles;
     try {
-      candles = await kite.getHistoricalData(instrumentToken, 'minute', fromDate, toDate, false, false);
+      candles = await kite.getHistoricalData(instrumentToken, interval, fromDate, toDate, continuous, oi);
     } catch (err) {
       const error = {
         name: err.name,
@@ -278,7 +348,7 @@ async function getNiftyIndexPerMinute(req, res, next) {
 
     return res.json({
       instrument_token: instrumentToken,
-      interval: 'minute',
+      interval,
       from: fromDate,
       to: toDate,
       candles
@@ -286,6 +356,22 @@ async function getNiftyIndexPerMinute(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+function parseKiteDate(value, fallback) {
+  if (value === undefined || value === null || value === '') {
+    return formatKiteDate(fallback);
+  }
+
+  if (typeof value !== 'string') return null;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : formatKiteDate(date);
+}
+
+function parseBooleanOption(value) {
+  return value === true || value === 1 || value === '1' || value === 'true';
 }
 
 function formatKiteDate(date) {
@@ -303,4 +389,13 @@ function formatKiteDate(date) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
-module.exports = { kiteLogin, kiteCallback, getKiteSession, getKiteProfile, getNiftyIndexPerMinute, saveKiteSession };
+module.exports = {
+  kiteLogin,
+  kiteCallback,
+  getKiteSession,
+  getKiteProfile,
+  getAllInstruments,
+  getInstrumentsByExchange,
+  getNiftyIndexPerMinute,
+  saveKiteSession
+};
