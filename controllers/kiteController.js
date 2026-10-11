@@ -250,24 +250,57 @@ async function getNiftyIndexPerMinute(req, res, next) {
     const { apiKey } = getKiteApiConfig();
 
     const instrumentToken = Number(req.query.instrument_token || 256265);
+    if (!Number.isSafeInteger(instrumentToken) || instrumentToken <= 0) {
+      return res.status(400).json({ message: 'instrument_token must be a positive integer' });
+    }
+
     const to = new Date();
     const from = new Date(to.getTime() - 60 * 60 * 1000);
+    const fromDate = formatKiteDate(from);
+    const toDate = formatKiteDate(to);
 
     const kite = new KiteConnect({ api_key: apiKey });
     kite.setAccessToken(session.accessToken);
 
-    const candles = await kite.getHistoricalData(instrumentToken, 'minute', from.toISOString(), to.toISOString(), false, false);
+    let candles;
+    try {
+      candles = await kite.getHistoricalData(instrumentToken, 'minute', fromDate, toDate, false, false);
+    } catch (err) {
+      const error = {
+        name: err.name,
+        type: err.error_type || err.data?.error_type,
+        status: err.status || err.response?.status,
+        message: err.message
+      };
+      logger.error('Kite historical data request failed', error);
+      return res.status(502).json({ message: 'Kite historical data request failed', error });
+    }
 
     return res.json({
       instrument_token: instrumentToken,
       interval: 'minute',
-      from: from.toISOString(),
-      to: to.toISOString(),
+      from: fromDate,
+      to: toDate,
       candles
     });
   } catch (err) {
     next(err);
   }
+}
+
+function formatKiteDate(date) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date).map(({ type, value }) => [type, value]));
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 module.exports = { kiteLogin, kiteCallback, getKiteSession, getKiteProfile, getNiftyIndexPerMinute, saveKiteSession };
