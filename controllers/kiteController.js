@@ -297,7 +297,7 @@ function respondWithKiteError(res, message, err) {
   return res.status(502).json({ message, error });
 }
 
-async function getNiftyIndexPerMinute(req, res, next) {
+async function getNiftyIndexPerMinute_fixed(req, res, next) {
   try {
     const session = await getKiteSession();
     if (!session) {
@@ -320,8 +320,8 @@ async function getNiftyIndexPerMinute(req, res, next) {
 
     const to = new Date();
     const from = new Date(to.getTime() - 60 * 60 * 1000);
-    const fromDate = parseKiteDate(options.from, from);
-    const toDate = parseKiteDate(options.to, to);
+    const fromDate = parseKiteDate(options.from_date ?? options.from, from);
+    const toDate = parseKiteDate(options.to_date ?? options.to, to);
     if (!fromDate || !toDate || new Date(fromDate) >= new Date(toDate)) {
       return res.status(400).json({ message: 'from and to must be valid dates, with from earlier than to' });
     }
@@ -387,6 +387,69 @@ function formatKiteDate(date) {
   }).formatToParts(date).map(({ type, value }) => [type, value]));
 
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+async function getNiftyIndexPerMinute(req, res, next) {
+  try {
+    const session = await getKiteSession();
+    if (!session) {
+      return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
+    }
+
+    const { apiKey } = getKiteApiConfig();
+
+    const options = { ...req.query, ...(req.body || {}) };
+    const instrumentToken = Number(options.instrument_token || 256265);
+    if (!Number.isSafeInteger(instrumentToken) || instrumentToken <= 0) {
+      return res.status(400).json({ message: 'instrument_token must be a positive integer' });
+    }
+
+    const interval = options.interval || 'minute';
+    const validIntervals = ['minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'];
+    if (!validIntervals.includes(interval)) {
+      return res.status(400).json({ message: 'Unsupported interval', validIntervals });
+    }
+
+        
+
+    const to = new Date();
+    const from = new Date(to.getTime() - 60 * 60 * 1000);
+    const fromDate = parseKiteDate(options.from_date ?? options.from, from);
+    const toDate = parseKiteDate(options.to_date ?? options.to, to);
+    if (!fromDate || !toDate || new Date(fromDate) >= new Date(toDate)) {
+      return res.status(400).json({ message: 'from and to must be valid dates, with from earlier than to' });
+    }
+
+    const continuous = parseBooleanOption(options.continuous);
+    const oi = parseBooleanOption(options.oi);
+
+    const kite = new KiteConnect({ api_key: apiKey });
+    kite.setAccessToken(session.accessToken);
+
+    let candles;
+    try {
+      candles = await kite.getHistoricalData(instrumentToken, interval, fromDate, toDate, continuous, oi);
+    } catch (err) {
+      const error = {
+        name: err.name,
+        type: err.error_type || err.data?.error_type,
+        status: err.status || err.response?.status,
+        message: err.message
+      };
+      logger.error('Kite historical data request failed', error);
+      return res.status(502).json({ message: 'Kite historical data request failed', error });
+    }
+
+    return res.json({
+      instrument_token: instrumentToken,
+      interval,
+      from: fromDate,
+      to: toDate,
+      candles
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = {
