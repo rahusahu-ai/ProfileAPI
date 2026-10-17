@@ -346,15 +346,23 @@ async function saveHistoricalCandles(instrumentToken, interval, exchange, tradin
 }
 
 function mapKiteInstrumentToDatabase(instrument) {
+  const exchangeTokenIsBlank = instrument.exchange_token === null
+    || instrument.exchange_token === undefined
+    || (typeof instrument.exchange_token === 'string' && instrument.exchange_token.trim() === '');
+
   return {
     instrument_token: instrument.instrument_token,
-    exchange_token: instrument.exchange_token || null,
+    exchange_token: exchangeTokenIsBlank ? null : instrument.exchange_token,
     trading_symbol: instrument.tradingsymbol,
-    name: instrument.name || null,
+    name: instrument.name,
     exchange: instrument.exchange,
     segment: instrument.segment,
     instrument_type: instrument.instrument_type,
-    expiry: instrument.expiry || null,
+    expiry: instrument.expiry === '' || instrument.expiry === null || instrument.expiry === undefined
+      ? null
+      : instrument.expiry instanceof Date
+        ? instrument.expiry.toISOString().slice(0, 10)
+        : String(instrument.expiry).slice(0, 10),
     strike: instrument.strike,
     tick_size: instrument.tick_size,
     lot_size: instrument.lot_size,
@@ -363,7 +371,11 @@ function mapKiteInstrumentToDatabase(instrument) {
 }
 
 async function saveKiteInstruments(instruments) {
-  const databaseInstruments = instruments.map(mapKiteInstrumentToDatabase);
+  const databaseInstruments = instruments
+    .filter((instrument) => instrument.instrument_token !== null
+      && instrument.instrument_token !== undefined
+      && !(typeof instrument.instrument_token === 'string' && instrument.instrument_token.trim() === ''))
+    .map(mapKiteInstrumentToDatabase);
   if (databaseInstruments.length === 0) return 0;
 
   return withDBCommunicator(async (db) => {
@@ -445,14 +457,20 @@ async function saveKiteInstruments(instruments) {
     await db.client.query('BEGIN');
     try {
       await db.client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_kite_trade_instruments_token
+        ON kite_trade.instruments (instrument_token)
+      `);
+      await db.client.query(`
         INSERT INTO kite_trade.instruments
           (instrument_token, exchange_token, trading_symbol, name, exchange, segment,
            instrument_type, expiry, strike, tick_size, lot_size, last_price)
-        SELECT instrument_token, exchange_token, trading_symbol, name, exchange, segment,
-               instrument_type, expiry, strike, tick_size, lot_size, last_price
+        SELECT NULLIF(BTRIM(instrument_token), '')::BIGINT,
+               NULLIF(BTRIM(exchange_token), '')::BIGINT,
+               trading_symbol, name, exchange, segment, instrument_type, expiry,
+               strike, tick_size, lot_size, last_price
         FROM jsonb_to_recordset($1::jsonb) AS instrument(
-          instrument_token BIGINT,
-          exchange_token BIGINT,
+          instrument_token TEXT,
+          exchange_token TEXT,
           trading_symbol VARCHAR(100),
           name VARCHAR(100),
           exchange VARCHAR(20),
@@ -464,6 +482,7 @@ async function saveKiteInstruments(instruments) {
           lot_size INTEGER,
           last_price NUMERIC(18, 4)
         )
+        WHERE NULLIF(BTRIM(instrument_token), '') IS NOT NULL
         ON CONFLICT (instrument_token) DO UPDATE SET
           exchange_token = EXCLUDED.exchange_token,
           trading_symbol = EXCLUDED.trading_symbol,
