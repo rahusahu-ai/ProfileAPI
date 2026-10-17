@@ -345,71 +345,26 @@ async function saveHistoricalCandles(instrumentToken, interval, exchange, tradin
   });
 }
 
-function normalizeKiteInstrument(instrument, index) {
-  const instrumentToken = Number(instrument.instrument_token);
-  const exchangeToken = instrument.exchange_token === '' || instrument.exchange_token === null
-    || instrument.exchange_token === undefined ? null : Number(instrument.exchange_token);
-  const strike = instrument.strike === '' || instrument.strike === null
-    || instrument.strike === undefined ? 0 : Number(instrument.strike);
-  const tickSize = Number(instrument.tick_size);
-  const lotSize = Number(instrument.lot_size);
-  const lastPrice = instrument.last_price === '' || instrument.last_price === null
-    || instrument.last_price === undefined ? null : Number(instrument.last_price);
-  const instrumentType = String(instrument.instrument_type || '').toUpperCase();
-  let expiry = instrument.expiry || null;
-  if (expiry instanceof Date) {
-    if (Number.isNaN(expiry.getTime())) {
-      throw new TypeError(`Invalid expiry in Kite instrument at index ${index}`);
-    }
-    expiry = expiry.toISOString().slice(0, 10);
-  }
-
-  if (!Number.isSafeInteger(instrumentToken) || instrumentToken <= 0
-    || (exchangeToken !== null && (!Number.isSafeInteger(exchangeToken) || exchangeToken < 0))
-    || typeof instrument.tradingsymbol !== 'string' || !instrument.tradingsymbol
-    || instrument.tradingsymbol.length > 100
-    || typeof instrument.exchange !== 'string' || !instrument.exchange
-    || instrument.exchange.length > 20
-    || typeof instrument.segment !== 'string' || !instrument.segment
-    || instrument.segment.length > 30
-    || (instrument.name && String(instrument.name).length > 100)
-    || !['EQ', 'FUT', 'CE', 'PE'].includes(instrumentType)
-    || !Number.isFinite(strike) || strike < 0
-    || !Number.isFinite(tickSize) || tickSize <= 0
-    || !Number.isSafeInteger(lotSize) || lotSize <= 0
-    || (lastPrice !== null && (!Number.isFinite(lastPrice) || lastPrice < 0))
-    || (expiry !== null && !/^\d{4}-\d{2}-\d{2}$/.test(expiry))) {
-    throw new TypeError(`Invalid Kite instrument at index ${index}`);
-  }
-
+function mapKiteInstrumentToDatabase(instrument) {
   return {
-    instrument_token: instrumentToken,
-    exchange_token: exchangeToken,
-    trading_symbol: String(instrument.tradingsymbol),
-    name: instrument.name ? String(instrument.name) : null,
-    exchange: String(instrument.exchange),
-    segment: String(instrument.segment),
-    instrument_type: instrumentType,
-    expiry,
-    strike,
-    tick_size: tickSize,
-    lot_size: lotSize,
-    last_price: lastPrice
+    instrument_token: instrument.instrument_token,
+    exchange_token: instrument.exchange_token || null,
+    trading_symbol: instrument.tradingsymbol,
+    name: instrument.name || null,
+    exchange: instrument.exchange,
+    segment: instrument.segment,
+    instrument_type: instrument.instrument_type,
+    expiry: instrument.expiry || null,
+    strike: instrument.strike,
+    tick_size: instrument.tick_size,
+    lot_size: instrument.lot_size,
+    last_price: instrument.last_price
   };
 }
 
 async function saveKiteInstruments(instruments) {
-  if (!Array.isArray(instruments)) {
-    throw new TypeError('Kite instruments response must be an array');
-  }
-
-  const normalizedInstruments = Array.from(
-    new Map(instruments.map((instrument, index) => {
-      const normalized = normalizeKiteInstrument(instrument, index);
-      return [normalized.instrument_token, normalized];
-    })).values()
-  );
-  if (normalizedInstruments.length === 0) return 0;
+  const databaseInstruments = instruments.map(mapKiteInstrumentToDatabase);
+  if (databaseInstruments.length === 0) return 0;
 
   return withDBCommunicator(async (db) => {
     if (db.useSQLServer) {
@@ -418,8 +373,8 @@ async function saveKiteInstruments(instruments) {
       await transaction.begin();
       try {
         const batchSize = 170;
-        for (let start = 0; start < normalizedInstruments.length; start += batchSize) {
-          const batch = normalizedInstruments.slice(start, start + batchSize);
+        for (let start = 0; start < databaseInstruments.length; start += batchSize) {
+          const batch = databaseInstruments.slice(start, start + batchSize);
           const parameters = [];
           const valueRows = batch.map((instrument, rowIndex) => {
             const values = [
@@ -480,7 +435,7 @@ async function saveKiteInstruments(instruments) {
           `);
         }
         await transaction.commit();
-        return normalizedInstruments.length;
+        return databaseInstruments.length;
       } catch (err) {
         await transaction.rollback();
         throw err;
@@ -522,9 +477,9 @@ async function saveKiteInstruments(instruments) {
           lot_size = EXCLUDED.lot_size,
           last_price = EXCLUDED.last_price,
           updated_at = NOW()
-      `, [JSON.stringify(normalizedInstruments)]);
+      `, [JSON.stringify(databaseInstruments)]);
       await db.client.query('COMMIT');
-      return normalizedInstruments.length;
+      return databaseInstruments.length;
     } catch (err) {
       await db.client.query('ROLLBACK');
       throw err;
@@ -608,9 +563,6 @@ async function getAllInstruments(req, res, next) {
     try {
       savedInstruments = await saveKiteInstruments(instruments);
     } catch (err) {
-      if (err instanceof TypeError) {
-        return res.status(502).json({ message: 'Kite returned invalid instrument data', error: err.message });
-      }
       const error = getDatabaseErrorDetails(err);
       logger.error('Failed to save Kite instruments', error);
       return res.status(500).json({ message: 'Kite instruments were fetched but could not be saved', error });
