@@ -832,6 +832,188 @@ function formatKiteDate(date) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
+function getBackfillRange(years, now = new Date()) {
+  const end = formatKiteDate(now);
+  const [currentYear, currentMonth, currentDay] = end.slice(0, 10).split('-').map(Number);
+  const startYear = currentYear - years;
+  const lastDayOfStartMonth = new Date(Date.UTC(startYear, currentMonth, 0)).getUTCDate();
+  const startDay = Math.min(currentDay, lastDayOfStartMonth);
+  const pad = (value) => String(value).padStart(2, '0');
+
+  return {
+    from: `${startYear}-${pad(currentMonth)}-${pad(startDay)} 00:00:00`,
+    to: end
+  };
+}
+
+function addCalendarDays(kiteDate, days) {
+  const date = new Date(`${kiteDate.slice(0, 10)}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.toISOString().slice(0, 10)} 00:00:00`;
+}
+
+async function getInstrumentMetadata(instrumentToken) {
+  return withDBCommunicator(async (db) => {
+    if (db.useSQLServer) {
+      const sql = require('mssql');
+      const result = await db.connectionPool.request()
+        .input('instrument_token', sql.BigInt, instrumentToken)
+        .query(`
+          SELECT TOP (1) exchange, trading_symbol, [name]
+          FROM [kite_trade].[instruments]
+          WHERE instrument_token = @instrument_token
+        `);
+      return result.recordset[0] || null;
+    }
+
+    const result = await db.client.query(`
+      SELECT exchange, trading_symbol, name
+      FROM kite_trade.instruments
+      WHERE instrument_token = $1
+      LIMIT 1
+    `, [instrumentToken]);
+    return result.rows[0] || null;
+  });
+}
+
+async function backfillHistoricalData(req, res, next) {
+  const options = { ...req.query, ...(req.body || {}) };
+  const instrumentToken = Number(options.instrument_token);
+  const requestedSymbol = options.symbol || options.tradingsymbol;
+  const symbol = typeof requestedSymbol === 'string' ? requestedSymbol.trim() : '';
+  const years = Number(options.years === undefined ? options.year : options.years);
+  const interval = options.interval || 'day';
+
+  if (!Number.isSafeInteger(instrumentToken) || instrumentToken <= 0) {
+    return res.status(400).json({ message: 'instrument_token must be a positive integer' });
+  }
+  if (!symbol) {
+    return res.status(400).json({ message: 'symbol is required' });
+  }
+  if (!Number.isInteger(years) || years < 1 || years > 15) {
+    return res.status(400).json({ message: 'years must be an integer from 1 to 15' });
+  }
+  if (!KITE_HISTORICAL_INTERVALS.includes(interval)) {
+    return res.status(400).json({ message: 'Unsupported interval', validIntervals: KITE_HISTORICAL_INTERVALS });
+  }
+
+  try {
+    const session = await getKiteSession();
+    if (!session) {
+      return res.status(401).json({ message: 'No saved Kite session. Complete Kite login first.' });
+    }
+
+    let instrument;
+    try {
+      instrument = await getInstrumentMetadata(instrumentToken);
+    } catch (err) {
+      const error = getDatabaseErrorDetails(err);
+      logger.error('Failed to look up instrument for historical backfill', error);
+      return res.status(500).json({ message: 'Could not look up instrument metadata', error });
+    }
+    if (!instrument) {
+      return res.status(404).json({
+        message: 'Instrument not found in kite_trade.instruments; import the instrument list first'
+      });
+    }
+
+    const { apiKey } = getKiteApiConfig();
+    const kite = new KiteConnect({ api_key: apiKey });
+    kite.setAccessToken(session.accessToken);
+
+    const range = getBackfillRange(years);
+    const chunkDays = interval === 'day' ? 365 : 60;
+    const totalDays = Math.ceil(
+      (new Date(`${range.to.slice(0, 10)}T00:00:00Z`) - new Date(`${range.from.slice(0, 10)}T00:00:00Z`))
+      / (24 * 60 * 60 * 1000)
+    ) + 1;
+    const totalChunks = Math.ceil(totalDays / chunkDays);
+    let completedChunks = 0;
+    let savedCandles = 0;
+    let cursor = range.from;
+
+    while (cursor <= range.to) {
+      const nextChunkStart = addCalendarDays(cursor, chunkDays);
+      const chunkEndDate = new Date(`${nextChunkStart.slice(0, 10)}T00:00:00Z`);
+      chunkEndDate.setUTCSeconds(chunkEndDate.getUTCSeconds() - 1);
+      const chunkEnd = `${chunkEndDate.toISOString().slice(0, 10)} 23:59:59`;
+      const chunkTo = chunkEnd < range.to
+        ? chunkEnd
+        : range.to;
+
+      let candles;
+      try {
+        candles = await kite.getHistoricalData(
+          instrumentToken,
+          interval,
+          cursor,
+          chunkTo,
+          parseBooleanOption(options.continuous),
+          parseBooleanOption(options.oi)
+        );
+      } catch (err) {
+        const error = {
+          name: err.name,
+          type: err.error_type || err.data?.error_type,
+          status: err.status || err.response?.status,
+          message: err.message
+        };
+        logger.error('Kite historical backfill request failed', { ...error, cursor, chunkTo });
+        return res.status(502).json({
+          message: 'Historical backfill stopped because Kite rejected a chunk',
+          error,
+          failed_chunk: { from: cursor, to: chunkTo },
+          completed_chunks: completedChunks,
+          saved_candles: savedCandles
+        });
+      }
+
+      try {
+        const result = await saveHistoricalCandles(
+          instrumentToken,
+          interval,
+          instrument.exchange,
+          symbol,
+          instrument.name || symbol,
+          candles
+        );
+        savedCandles += result.savedCandles;
+      } catch (err) {
+        const error = getDatabaseErrorDetails(err);
+        logger.error('Failed to save historical backfill chunk', { ...error, cursor, chunkTo });
+        return res.status(500).json({
+          message: 'Historical backfill stopped because a chunk could not be saved',
+          error,
+          failed_chunk: { from: cursor, to: chunkTo },
+          completed_chunks: completedChunks,
+          saved_candles: savedCandles
+        });
+      }
+
+      completedChunks += 1;
+      cursor = nextChunkStart;
+      if (cursor <= range.to) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+    }
+
+    return res.json({
+      instrument_token: instrumentToken,
+      symbol,
+      interval,
+      years,
+      from: range.from,
+      to: range.to,
+      completed_chunks: completedChunks,
+      total_chunks: totalChunks,
+      saved_candles: savedCandles,
+      saved: true
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getIndexDataForGivenTimeInterval(req, res, next) {
   try {
     const session = await getKiteSession();
@@ -1018,6 +1200,7 @@ module.exports = {
   getAllExchangeList,
   getSegmentList,
   getAllEntityList,
+  backfillHistoricalData,
   getIndexDataForGivenTimeInterval,
   saveNiftyIndexCandles,
   saveKiteSession
