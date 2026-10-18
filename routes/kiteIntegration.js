@@ -9,6 +9,7 @@ const {
 	getAllExchangeList,
 	getSegmentList,
 	getAllEntityList,
+	backfillHistoricalData,
 	getIndexDataForGivenTimeInterval,
 	saveNiftyIndexCandles
 } = require('../controllers/kiteController');
@@ -20,6 +21,7 @@ router.get('/instruments/:exchange', getInstrumentsByExchange);
 router.get('/getAllExchangeList', getAllExchangeList);
 router.get('/getSegmentList', getSegmentList);
 router.get('/getAllEntityList', getAllEntityList);
+router.post('/backfillHistoricalData', backfillHistoricalData);
 router.get('/getNiftyIndexPerMinute', getIndexDataForGivenTimeInterval);
 router.post('/getNiftyIndexPerMinute', getIndexDataForGivenTimeInterval);
 router.post('/saveNiftyIndexCandles', saveNiftyIndexCandles);
